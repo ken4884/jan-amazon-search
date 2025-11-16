@@ -16,6 +16,15 @@
 <body>
   <h2>JANコードをスキャンしてください</h2>
   <input id="janInput" autofocus placeholder="ここにスキャン" />
+  <button id="clearBtn" style="font-size:18px; margin-top:10px;">クリア</button>
+
+  <script>
+    const clearBtn = document.getElementById("clearBtn");
+    clearBtn.addEventListener("click", () => {
+      input.value = "";
+      input.focus();
+    });
+  </script>
 
   <script>
     const input = document.getElementById('janInput');
