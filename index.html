@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>JANスキャン → Amazon検索</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    input {
+      width: 100%;
+      font-size: 24px;
+      padding: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h2>JANコードをスキャンしてください</h2>
+  <input id="janInput" autofocus placeholder="ここにスキャン" />
+
+  <script>
+    const input = document.getElementById('janInput');
+
+    function forceFocus() {
+      if (document.activeElement !== input) {
+        input.focus();
+      }
+    }
+
+    window.addEventListener('load', forceFocus);
+    window.addEventListener('focus', forceFocus);
+    setInterval(forceFocus, 1000);
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const raw = input.value;
+        const jan = raw.replace(/\D/g, '');
+
+        if (!jan) {
+          alert('数字が読み取れませんでした');
+          input.value = '';
+          return;
+        }
+
+        location.href = 'https://www.amazon.co.jp/s?k=' + jan;
+      }
+    });
+  </script>
+</body>
+</html>
