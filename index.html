@@ -6,29 +6,79 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: sans-serif; padding: 20px; }
-    input {
+    h2 { margin-bottom: 12px; }
+    #controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      margin-bottom: 16px;
+    }
+    #controls button {
+      flex: 1;
+      font-size: 18px;
+      padding: 8px;
+    }
+    #janInput {
       width: 100%;
       font-size: 24px;
       padding: 12px;
+    }
+    #historyTitle {
+      margin-top: 16px;
+      margin-bottom: 4px;
+      font-weight: bold;
+    }
+    #historyList {
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+    }
+    #historyList li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px solid #ddd;
+      font-size: 16px;
+    }
+    #historyList button {
+      font-size: 14px;
+      padding: 2px 6px;
+    }
+    #clearAllBtn {
+      margin-top: 8px;
+      font-size: 14px;
+      padding: 6px 8px;
     }
   </style>
 </head>
 <body>
   <h2>JANコードをスキャンしてください</h2>
-  <input id="janInput" autofocus placeholder="ここにスキャン" />
-  <button id="clearBtn" style="font-size:18px; margin-top:10px;">クリア</button>
 
-  <script>
-    const clearBtn = document.getElementById("clearBtn");
-    clearBtn.addEventListener("click", () => {
-      input.value = "";
-      input.focus();
-    });
-  </script>
+  <input id="janInput" autofocus placeholder="ここにスキャン" />
+
+  <div id="controls">
+    <button id="favBtn">♡ 保存</button>
+    <button id="clearBtn">クリア</button>
+  </div>
+
+  <div id="historyArea">
+    <div id="historyTitle">保存したJAN（最大100件）</div>
+    <ul id="historyList"></ul>
+    <button id="clearAllBtn" style="display:none;">履歴を全削除</button>
+  </div>
 
   <script>
     const input = document.getElementById('janInput');
+    const favBtn = document.getElementById('favBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const historyList = document.getElementById('historyList');
+    const clearAllBtn = document.getElementById('clearAllBtn');
 
+    const STORAGE_KEY = 'janFavorites';
+    const MAX_ITEMS = 100;
+
+    // ---------- フォーカス制御 ----------
     function forceFocus() {
       if (document.activeElement !== input) {
         input.focus();
@@ -39,10 +89,71 @@
     window.addEventListener('focus', forceFocus);
     setInterval(forceFocus, 1000);
 
+    // ---------- 履歴の読み書き ----------
+    function loadHistory() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return [];
+        const arr = JSON.parse(raw);
+        if (!Array.isArray(arr)) return [];
+        return arr;
+      } catch (e) {
+        console.error('履歴の読み込みに失敗:', e);
+        return [];
+      }
+    }
+
+    function saveHistory(arr) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+      } catch (e) {
+        console.error('履歴の保存に失敗:', e);
+      }
+    }
+
+    function renderHistory() {
+      const history = loadHistory();
+      historyList.innerHTML = '';
+
+      if (history.length === 0) {
+        clearAllBtn.style.display = 'none';
+        return;
+      }
+
+      history.forEach((jan, index) => {
+        const li = document.createElement('li');
+
+        const span = document.createElement('span');
+        span.textContent = jan;
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '削除';
+        delBtn.addEventListener('click', () => {
+          const h = loadHistory();
+          h.splice(index, 1);
+          saveHistory(h);
+          renderHistory();
+        });
+
+        li.appendChild(span);
+        li.appendChild(delBtn);
+        historyList.appendChild(li);
+      });
+
+      clearAllBtn.style.display = 'inline-block';
+    }
+
+    // ---------- JAN抽出 ----------
+    function extractJanFromInput() {
+      const raw = input.value;
+      const jan = raw.replace(/\D/g, ''); // 数字以外削除
+      return jan;
+    }
+
+    // ---------- スキャン → Enter でAmazon検索 ----------
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        const raw = input.value;
-        const jan = raw.replace(/\D/g, '');
+        const jan = extractJanFromInput();
 
         if (!jan) {
           alert('数字が読み取れませんでした');
@@ -50,9 +161,50 @@
           return;
         }
 
+        // そのままAmazon検索へ
         location.href = 'https://www.amazon.co.jp/s?k=' + jan;
       }
     });
+
+    // ---------- クリアボタン ----------
+    clearBtn.addEventListener('click', () => {
+      input.value = '';
+      forceFocus();
+    });
+
+    // ---------- ♡保存ボタン ----------
+    favBtn.addEventListener('click', () => {
+      const jan = extractJanFromInput();
+
+      if (!jan) {
+        alert('保存できるJANがありません（入力欄が空か、数字がありません）');
+        return;
+      }
+
+      let history = loadHistory();
+
+      // 先頭に追加（重複も許容するならこのまま）
+      history.unshift(jan);
+
+      // 上限100件に制限
+      if (history.length > MAX_ITEMS) {
+        history = history.slice(0, MAX_ITEMS);
+      }
+
+      saveHistory(history);
+      renderHistory();
+      alert('保存しました: ' + jan);
+    });
+
+    // ---------- 履歴全削除ボタン ----------
+    clearAllBtn.addEventListener('click', () => {
+      if (!confirm('保存したJANをすべて削除しますか？')) return;
+      saveHistory([]);
+      renderHistory();
+    });
+
+    // 初期描画
+    renderHistory();
   </script>
 </body>
 </html>
