@@ -70,6 +70,7 @@
       font-size: 13px;
       padding: 3px 6px;
     }
+    #copyAllBtn,
     #clearAllBtn {
       margin-top: 8px;
       font-size: 14px;
@@ -93,6 +94,7 @@
     <div id="historyArea">
       <div id="historyTitle">保存したJAN（最大100件）</div>
       <ul id="historyList"></ul>
+      <button id="copyAllBtn" style="display:none;">履歴をコピー</button>
       <button id="clearAllBtn" style="display:none;">履歴を全削除</button>
     </div>
   </div>
@@ -103,6 +105,7 @@
     const favBtn = document.getElementById('favBtn');
     const clearBtn = document.getElementById('clearBtn');
     const historyList = document.getElementById('historyList');
+    const copyAllBtn = document.getElementById('copyAllBtn');
     const clearAllBtn = document.getElementById('clearAllBtn');
 
     const STORAGE_KEY = 'janFavorites';
@@ -146,6 +149,7 @@
       historyList.innerHTML = '';
 
       if (history.length === 0) {
+        copyAllBtn.style.display = 'none';
         clearAllBtn.style.display = 'none';
         return;
       }
@@ -159,29 +163,9 @@
         link.href = 'https://www.amazon.co.jp/s?k=' + encodeURIComponent(jan);
         link.className = 'jan-link';
 
-        // ボタン群（コピー・削除）
+        // ボタン群（削除のみ）
         const btnGroup = document.createElement('div');
         btnGroup.className = 'btn-group';
-
-        const copyBtn = document.createElement('button');
-        copyBtn.textContent = 'コピー';
-        copyBtn.addEventListener('click', async () => {
-          try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              await navigator.clipboard.writeText(jan);
-            } else {
-              // 古いブラウザ向けフォールバック
-              const tmpInput = document.createElement('input');
-              tmpInput.value = jan;
-              document.body.appendChild(tmpInput);
-              tmpInput.select();
-              document.execCommand('copy');
-              document.body.removeChild(tmpInput);
-            }
-          } catch (e) {
-            console.error('コピーに失敗:', e);
-          }
-        });
 
         const delBtn = document.createElement('button');
         delBtn.textContent = '削除';
@@ -192,7 +176,6 @@
           renderHistory();
         });
 
-        btnGroup.appendChild(copyBtn);
         btnGroup.appendChild(delBtn);
 
         li.appendChild(link);
@@ -200,6 +183,7 @@
         historyList.appendChild(li);
       });
 
+      copyAllBtn.style.display = 'inline-block';
       clearAllBtn.style.display = 'inline-block';
     }
 
@@ -262,7 +246,33 @@
 
       saveHistory(history);
       renderHistory();
-      // ここではポップアップを出さない（ご要望どおり）
+      // ポップアップなし（静かに保存）
+    });
+
+    // ---------- 履歴を一括コピー ----------
+    copyAllBtn.addEventListener('click', async () => {
+      const history = loadHistory();
+      if (history.length === 0) return;
+
+      const text = history.join('\n'); // JANごとに改行
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          // 古いブラウザ向けフォールバック
+          const tmpInput = document.createElement('textarea');
+          tmpInput.value = text;
+          document.body.appendChild(tmpInput);
+          tmpInput.select();
+          document.execCommand('copy');
+          document.body.removeChild(tmpInput);
+        }
+        alert('履歴をコピーしました');
+      } catch (e) {
+        console.error('履歴のコピーに失敗:', e);
+        alert('コピーに失敗しました');
+      }
     });
 
     // ---------- 履歴全削除ボタン ----------
