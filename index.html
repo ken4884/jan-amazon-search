@@ -5,23 +5,37 @@
   <title>JANスキャン → Amazon検索</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    h2 { margin-bottom: 12px; }
-    #controls {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-      margin-bottom: 16px;
+    * {
+      box-sizing: border-box;
     }
-    #controls button {
-      flex: 1;
-      font-size: 18px;
-      padding: 8px;
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      margin: 0;
+    }
+    #appContainer {
+      max-width: 480px;
+      margin: 0 auto; /* 中央寄せ */
+    }
+    h2 {
+      margin-bottom: 12px;
     }
     #janInput {
       width: 100%;
       font-size: 24px;
       padding: 12px;
+    }
+    #controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+      margin-bottom: 16px;
+    }
+    #controls button {
+      width: 100%;
+      font-size: 18px;
+      padding: 10px;
     }
     #historyTitle {
       margin-top: 16px;
@@ -40,36 +54,52 @@
       padding: 4px 0;
       border-bottom: 1px solid #ddd;
       font-size: 16px;
+      gap: 8px;
+    }
+    #historyList .jan-link {
+      text-decoration: underline;
+      color: #0645ad;
+      word-break: break-all;
+      flex: 1;
+    }
+    #historyList .btn-group {
+      display: flex;
+      gap: 4px;
     }
     #historyList button {
-      font-size: 14px;
-      padding: 2px 6px;
+      font-size: 13px;
+      padding: 3px 6px;
     }
     #clearAllBtn {
       margin-top: 8px;
       font-size: 14px;
       padding: 6px 8px;
+      width: 100%;
     }
   </style>
 </head>
 <body>
-  <h2>JANコードをスキャンしてください</h2>
+  <div id="appContainer">
+    <h2>JANコードをスキャンしてください</h2>
 
-  <input id="janInput" autofocus placeholder="ここにスキャン" />
+    <input id="janInput" autofocus placeholder="ここにスキャン" />
 
-  <div id="controls">
-    <button id="favBtn">♡ 保存</button>
-    <button id="clearBtn">クリア</button>
-  </div>
+    <div id="controls">
+      <button id="searchBtn">検索</button>
+      <button id="clearBtn">クリア</button>
+      <button id="favBtn">♡ 保存</button>
+    </div>
 
-  <div id="historyArea">
-    <div id="historyTitle">保存したJAN（最大100件）</div>
-    <ul id="historyList"></ul>
-    <button id="clearAllBtn" style="display:none;">履歴を全削除</button>
+    <div id="historyArea">
+      <div id="historyTitle">保存したJAN（最大100件）</div>
+      <ul id="historyList"></ul>
+      <button id="clearAllBtn" style="display:none;">履歴を全削除</button>
+    </div>
   </div>
 
   <script>
     const input = document.getElementById('janInput');
+    const searchBtn = document.getElementById('searchBtn');
     const favBtn = document.getElementById('favBtn');
     const clearBtn = document.getElementById('clearBtn');
     const historyList = document.getElementById('historyList');
@@ -123,8 +153,35 @@
       history.forEach((jan, index) => {
         const li = document.createElement('li');
 
-        const span = document.createElement('span');
-        span.textContent = jan;
+        // クリックでAmazon検索するリンク
+        const link = document.createElement('a');
+        link.textContent = jan;
+        link.href = 'https://www.amazon.co.jp/s?k=' + encodeURIComponent(jan);
+        link.className = 'jan-link';
+
+        // ボタン群（コピー・削除）
+        const btnGroup = document.createElement('div');
+        btnGroup.className = 'btn-group';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.textContent = 'コピー';
+        copyBtn.addEventListener('click', async () => {
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(jan);
+            } else {
+              // 古いブラウザ向けフォールバック
+              const tmpInput = document.createElement('input');
+              tmpInput.value = jan;
+              document.body.appendChild(tmpInput);
+              tmpInput.select();
+              document.execCommand('copy');
+              document.body.removeChild(tmpInput);
+            }
+          } catch (e) {
+            console.error('コピーに失敗:', e);
+          }
+        });
 
         const delBtn = document.createElement('button');
         delBtn.textContent = '削除';
@@ -135,8 +192,11 @@
           renderHistory();
         });
 
-        li.appendChild(span);
-        li.appendChild(delBtn);
+        btnGroup.appendChild(copyBtn);
+        btnGroup.appendChild(delBtn);
+
+        li.appendChild(link);
+        li.appendChild(btnGroup);
         historyList.appendChild(li);
       });
 
@@ -150,20 +210,29 @@
       return jan;
     }
 
-    // ---------- スキャン → Enter でAmazon検索 ----------
+    // ---------- 検索共通処理 ----------
+    function doSearchFromInput() {
+      const jan = extractJanFromInput();
+
+      if (!jan) {
+        alert('検索できるJANがありません（入力欄が空か、数字がありません）');
+        return;
+      }
+
+      // Amazon検索へ遷移
+      location.href = 'https://www.amazon.co.jp/s?k=' + encodeURIComponent(jan);
+    }
+
+    // Enterキーで検索
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        const jan = extractJanFromInput();
-
-        if (!jan) {
-          alert('数字が読み取れませんでした');
-          input.value = '';
-          return;
-        }
-
-        // そのままAmazon検索へ
-        location.href = 'https://www.amazon.co.jp/s?k=' + jan;
+        doSearchFromInput();
       }
+    });
+
+    // 「検索」ボタンで検索
+    searchBtn.addEventListener('click', () => {
+      doSearchFromInput();
     });
 
     // ---------- クリアボタン ----------
@@ -183,7 +252,7 @@
 
       let history = loadHistory();
 
-      // 先頭に追加（重複も許容するならこのまま）
+      // 先頭に追加（重複は許容）
       history.unshift(jan);
 
       // 上限100件に制限
@@ -193,7 +262,7 @@
 
       saveHistory(history);
       renderHistory();
-      alert('保存しました: ' + jan);
+      // ここではポップアップを出さない（ご要望どおり）
     });
 
     // ---------- 履歴全削除ボタン ----------
