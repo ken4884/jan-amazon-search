@@ -5,26 +5,17 @@
   <title>JANスキャン → Amazon検索</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      font-family: sans-serif;
-      padding: 20px;
-      margin: 0;
-    }
-    #appContainer {
-      max-width: 480px;
-      margin: 0 auto; /* 中央寄せ */
-    }
-    h2 {
-      margin-bottom: 12px;
-    }
+    * { box-sizing: border-box; }
+    body { font-family: sans-serif; padding: 20px; margin: 0; }
+    #appContainer { max-width: 480px; margin: 0 auto; }
+    h2 { margin-bottom: 12px; }
+
     #janInput {
       width: 100%;
       font-size: 24px;
       padding: 12px;
     }
+
     #controls {
       display: flex;
       flex-direction: column;
@@ -37,6 +28,7 @@
       font-size: 18px;
       padding: 10px;
     }
+
     #historyTitle {
       margin-top: 16px;
       margin-bottom: 4px;
@@ -62,16 +54,12 @@
       word-break: break-all;
       flex: 1;
     }
-    #historyList .btn-group {
-      display: flex;
-      gap: 4px;
-    }
     #historyList button {
       font-size: 13px;
       padding: 3px 6px;
     }
-    #copyAllBtn,
-    #clearAllBtn {
+
+    #copyAllBtn, #clearAllBtn {
       margin-top: 8px;
       font-size: 14px;
       padding: 6px 8px;
@@ -80,239 +68,206 @@
   </style>
 </head>
 <body>
-  <div id="appContainer">
-    <h2>JANコードをスキャンしてください</h2>
 
-    <input id="janInput" autofocus placeholder="ここにスキャン" />
+<div id="appContainer">
 
-    <div id="controls">
-      <button id="searchBtn">検索</button>
-      <button id="clearBtn">クリア</button>
-      <button id="favBtn">♡ 保存</button>
-    </div>
+  <h2>JANコードをスキャンしてください</h2>
 
-    <div id="historyArea">
-      <div id="historyTitle">保存したJAN（最大100件）</div>
-      <ul id="historyList"></ul>
-      <button id="copyAllBtn" style="display:none;">履歴をコピー</button>
-      <button id="clearAllBtn" style="display:none;">履歴を全削除</button>
-    </div>
+  <input id="janInput" autofocus placeholder="ここにスキャン" />
+
+  <div id="controls">
+    <button id="searchBtn">検索</button>
+    <button id="clearBtn">クリア</button>
+    <button id="favBtn">♡ 保存</button>
   </div>
 
-  <script>
-    const input = document.getElementById('janInput');
-    const searchBtn = document.getElementById('searchBtn');
-    const favBtn = document.getElementById('favBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const historyList = document.getElementById('historyList');
-    const copyAllBtn = document.getElementById('copyAllBtn');
-    const clearAllBtn = document.getElementById('clearAllBtn');
+  <div id="historyArea">
+    <div id="historyTitle">保存したJAN（最大100件）</div>
+    <ul id="historyList"></ul>
+    <button id="copyAllBtn" style="display:none;">履歴をコピー</button>
+    <button id="clearAllBtn" style="display:none;">履歴を全削除</button>
+  </div>
 
-    const STORAGE_KEY = 'janFavorites';
-    const MAX_ITEMS = 100;
+</div>
 
-    // ---------- フォーカス制御 ----------
-    function forceFocus() {
-      if (document.activeElement !== input) {
-        input.focus();
+<script>
+
+  // ===============================
+  // EAN-13 正当性チェック
+  // ===============================
+  function isValidEAN13(code) {
+    if (!/^\d{13}$/.test(code)) return false;
+
+    const digits = code.split('').map(n => parseInt(n));
+    const checkDigit = digits[12];
+
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      sum += digits[i] * (i % 2 === 0 ? 1 : 3);
+    }
+    const calc = (10 - (sum % 10)) % 10;
+
+    return calc === checkDigit;
+  }
+
+  // ===============================
+  // 文字列から「正しい13桁JAN」を自動抽出
+  // ===============================
+  function extractValidJan(raw) {
+    const digits = raw.replace(/\D/g, '');
+
+    for (let i = 0; i <= digits.length - 13; i++) {
+      const candidate = digits.substring(i, i + 13);
+      if (isValidEAN13(candidate)) {
+        return candidate;  // 最初に見つかった正しいJANのみ返す
       }
     }
 
-    window.addEventListener('load', forceFocus);
-    window.addEventListener('focus', forceFocus);
-    setInterval(forceFocus, 1000);
+    return ""; // 見つからない場合
+  }
 
-    // ---------- 履歴の読み書き ----------
-    function loadHistory() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
-        const arr = JSON.parse(raw);
-        if (!Array.isArray(arr)) return [];
-        return arr;
-      } catch (e) {
-        console.error('履歴の読み込みに失敗:', e);
-        return [];
-      }
+  // ===============================
+
+  const input = document.getElementById('janInput');
+  const searchBtn = document.getElementById('searchBtn');
+  const favBtn = document.getElementById('favBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const historyList = document.getElementById('historyList');
+  const copyAllBtn = document.getElementById('copyAllBtn');
+  const clearAllBtn = document.getElementById('clearAllBtn');
+
+  const STORAGE_KEY = 'janFavorites';
+  const MAX_ITEMS = 100;
+
+  // ---------- フォーカス維持 ----------
+  function forceFocus() {
+    if (document.activeElement !== input) {
+      input.focus();
+    }
+  }
+  window.addEventListener('load', forceFocus);
+  window.addEventListener('focus', forceFocus);
+  setInterval(forceFocus, 1000);
+
+  // ---------- 履歴管理 ----------
+  function loadHistory() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory(arr) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+  }
+
+  function renderHistory() {
+    const history = loadHistory();
+    historyList.innerHTML = "";
+
+    if (history.length === 0) {
+      copyAllBtn.style.display = 'none';
+      clearAllBtn.style.display = 'none';
+      return;
     }
 
-    function saveHistory(arr) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
-      } catch (e) {
-        console.error('履歴の保存に失敗:', e);
-      }
-    }
+    history.forEach((jan, index) => {
+      const li = document.createElement('li');
 
-    function renderHistory() {
-      const history = loadHistory();
-      historyList.innerHTML = '';
+      const link = document.createElement('a');
+      link.textContent = jan;
+      link.href = "https://www.amazon.co.jp/s?k=" + encodeURIComponent(jan);
+      link.className = "jan-link";
 
-      if (history.length === 0) {
-        copyAllBtn.style.display = 'none';
-        clearAllBtn.style.display = 'none';
-        return;
-      }
-
-      history.forEach((jan, index) => {
-        const li = document.createElement('li');
-
-        // クリックでAmazon検索するリンク
-        const link = document.createElement('a');
-        link.textContent = jan;
-        link.href = 'https://www.amazon.co.jp/s?k=' + encodeURIComponent(jan);
-        link.className = 'jan-link';
-
-        // ボタン群（削除のみ）
-        const btnGroup = document.createElement('div');
-        btnGroup.className = 'btn-group';
-
-        const delBtn = document.createElement('button');
-        delBtn.textContent = '削除';
-        delBtn.addEventListener('click', () => {
-          const h = loadHistory();
-          h.splice(index, 1);
-          saveHistory(h);
-          renderHistory();
-        });
-
-        btnGroup.appendChild(delBtn);
-
-        li.appendChild(link);
-        li.appendChild(btnGroup);
-        historyList.appendChild(li);
+      const delBtn = document.createElement('button');
+      delBtn.textContent = "削除";
+      delBtn.addEventListener('click', () => {
+        const h = loadHistory();
+        h.splice(index, 1);
+        saveHistory(h);
+        renderHistory();
       });
 
-      copyAllBtn.style.display = 'inline-block';
-      clearAllBtn.style.display = 'inline-block';
+      li.appendChild(link);
+      li.appendChild(delBtn);
+      historyList.appendChild(li);
+    });
+
+    copyAllBtn.style.display = 'inline-block';
+    clearAllBtn.style.display = 'inline-block';
+  }
+
+  // ---------- 新JAN抽出 ----------
+  function getJanFromInput() {
+    const raw = input.value;
+    return extractValidJan(raw); // ← A案：正しいJANだけ抜く
+  }
+
+  // ---------- 検索 ----------
+  function doSearch() {
+    const jan = getJanFromInput();
+    if (!jan) {
+      alert("有効なJANが見つかりませんでした");
+      return;
+    }
+    location.href = "https://www.amazon.co.jp/s?k=" + jan;
+  }
+
+  input.addEventListener('keydown', e => {
+    if (e.key === "Enter") doSearch();
+  });
+
+  searchBtn.addEventListener('click', doSearch);
+
+  // ---------- クリア ----------
+  clearBtn.addEventListener('click', () => {
+    input.value = "";
+    forceFocus();
+  });
+
+  // ---------- 保存 ----------
+  favBtn.addEventListener('click', () => {
+    const jan = getJanFromInput();
+    if (!jan) {
+      alert("保存できるJANがありません");
+      return;
     }
 
-    // ---------- JAN抽出 ----------
-    function extractJanFromInput() {
-      const raw = input.value;
-      const jan = raw.replace(/\D/g, ''); // 数字以外削除
-      return jan;
+    let history = loadHistory();
+    history.unshift(jan);
+    if (history.length > MAX_ITEMS) {
+      history = history.slice(0, MAX_ITEMS);
     }
-
-    // ---------- 追加：EAN-13検証関数（チェックデジット判定） ----------
-    function isValidEAN13(code) {
-      if (!/^\d{13}$/.test(code)) return false;
-    
-      const digits = code.split('').map(n => parseInt(n));
-      const checkDigit = digits[12];
-    
-      let sum = 0;
-      for (let i = 0; i < 12; i++) {
-        sum += digits[i] * (i % 2 === 0 ? 1 : 3);
-      }
-      const calculated = (10 - (sum % 10)) % 10;
-    
-      return calculated === checkDigit;
-    }
-
-    // ---------- 追加：文字列から正しいJANを抜き出す関数 ----------
-    function extractValidJan(raw) {
-      const digits = raw.replace(/\D/g, '');
-    
-      for (let i = 0; i <= digits.length - 13; i++) {
-        const candidate = digits.substring(i, i + 13);
-        if (isValidEAN13(candidate)) {
-          return candidate; // 最初に見つかった本物だけ返す
-        }
-      }
-      return ""; // 見つからなければ空
-    }
-
-    // ---------- 検索共通処理 ----------
-    function doSearchFromInput() {
-      const jan = extractJanFromInput();
-
-      if (!jan) {
-        alert('検索できるJANがありません（入力欄が空か、数字がありません）');
-        return;
-      }
-
-      // Amazon検索へ遷移
-      location.href = 'https://www.amazon.co.jp/s?k=' + encodeURIComponent(jan);
-    }
-
-    // Enterキーで検索
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        doSearchFromInput();
-      }
-    });
-
-    // 「検索」ボタンで検索
-    searchBtn.addEventListener('click', () => {
-      doSearchFromInput();
-    });
-
-    // ---------- クリアボタン ----------
-    clearBtn.addEventListener('click', () => {
-      input.value = '';
-      forceFocus();
-    });
-
-    // ---------- ♡保存ボタン ----------
-    favBtn.addEventListener('click', () => {
-      const jan = extractJanFromInput();
-
-      if (!jan) {
-        alert('保存できるJANがありません（入力欄が空か、数字がありません）');
-        return;
-      }
-
-      let history = loadHistory();
-
-      // 先頭に追加（重複は許容）
-      history.unshift(jan);
-
-      // 上限100件に制限
-      if (history.length > MAX_ITEMS) {
-        history = history.slice(0, MAX_ITEMS);
-      }
-
-      saveHistory(history);
-      renderHistory();
-      // ポップアップなし（静かに保存）
-    });
-
-    // ---------- 履歴を一括コピー ----------
-    copyAllBtn.addEventListener('click', async () => {
-      const history = loadHistory();
-      if (history.length === 0) return;
-
-      const text = history.join('\n'); // JANごとに改行
-
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(text);
-        } else {
-          // 古いブラウザ向けフォールバック
-          const tmpInput = document.createElement('textarea');
-          tmpInput.value = text;
-          document.body.appendChild(tmpInput);
-          tmpInput.select();
-          document.execCommand('copy');
-          document.body.removeChild(tmpInput);
-        }
-        alert('履歴をコピーしました');
-      } catch (e) {
-        console.error('履歴のコピーに失敗:', e);
-        alert('コピーに失敗しました');
-      }
-    });
-
-    // ---------- 履歴全削除ボタン ----------
-    clearAllBtn.addEventListener('click', () => {
-      if (!confirm('保存したJANをすべて削除しますか？')) return;
-      saveHistory([]);
-      renderHistory();
-    });
-
-    // 初期描画
+    saveHistory(history);
     renderHistory();
-  </script>
+  });
+
+  // ---------- 履歴コピー ----------
+  copyAllBtn.addEventListener('click', async () => {
+    const history = loadHistory();
+    const text = history.join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("履歴をコピーしました");
+    } catch {
+      alert("コピーに失敗しました");
+    }
+  });
+
+  // ---------- 履歴全削除 ----------
+  clearAllBtn.addEventListener('click', () => {
+    if (!confirm("保存したJANをすべて削除しますか？")) return;
+    saveHistory([]);
+    renderHistory();
+  });
+
+  renderHistory();
+
+</script>
 </body>
 </html>
